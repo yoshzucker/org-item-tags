@@ -46,7 +46,7 @@
 ;;
 ;; and tags on items are shown in the `org-tag' face and offered when
 ;; tags are completed.  They stand where a heading's do, at
-;; `org-tags-column'.  An item inherits the tags of the items above it
+;; `org-tags-column', as seen with `org-indent-mode' too.  An item inherits the tags of the items above it
 ;; and of its heading, as `org-use-tag-inheritance' says.
 ;;
 ;; For Lisp: `org-item-tags-get', `org-item-tags-set',
@@ -158,13 +158,32 @@ Replace the tags there; with none, leave the line without."
       (end-of-line)
       (delete-horizontal-space t))
     (when tags
-      ;; Where Org puts a heading's: `org-tags-column'.
+      ;; Where Org puts a heading's, `org-tags-column', as seen: less what
+      ;; the item's line is shown indented by more than its heading's.
       (let* ((string (org-make-tag-string tags))
              (words (current-column))
-             (column (if (>= org-tags-column 0)
-                         org-tags-column
-                       (- (abs org-tags-column) (string-width string)))))
+             (column (- (if (>= org-tags-column 0)
+                            org-tags-column
+                          (- (abs org-tags-column) (string-width string)))
+                        (org-item-tags--shown-indent bol))))
         (insert (make-string (max 1 (- column words)) ?\s) string)))))
+
+(defun org-item-tags--prefix-width (pos)
+  "Return how wide the `line-prefix' of the line at POS is shown, or 0."
+  (let ((prefix (get-text-property pos 'line-prefix)))
+    (if (stringp prefix) (string-width prefix) 0)))
+
+(defun org-item-tags--shown-indent (bol)
+  "Return how much more the line at BOL is shown indented than its heading.
+What `org-indent-mode' puts before the text under a heading, and not
+before the heading itself; 0 without it."
+  (- (org-item-tags--prefix-width bol)
+     (save-excursion
+       (goto-char bol)
+       (if (org-before-first-heading-p)
+           0
+         (org-back-to-heading t)
+         (org-item-tags--prefix-width (point))))))
 
 (defun org-item-tags-align-all ()
   "Align the tags on every item of the buffer, at `org-tags-column'."

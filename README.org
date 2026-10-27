@@ -57,8 +57,11 @@ Turned off, the mode takes all of this back.
 An item inherits the tags of the items above it and of its heading, as
 ~org-use-tag-inheritance~ says for headings.
 
-An item's tags stand where a heading's do, at ~org-tags-column~, and
-~C-u C-c C-q~, which aligns every heading's, aligns the items' too.
+An item's tags stand where a heading's do, at ~org-tags-column~, as
+they are seen: with ~org-indent-mode~, which shows the lines under a
+heading indented further than the heading, an item's are written that
+much to the left.  ~C-u C-c C-q~, which aligns every heading's, aligns
+the items' too.
 
 * For Lisp
 

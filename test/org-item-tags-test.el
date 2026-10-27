@@ -5,6 +5,7 @@
 (require 'ert)
 (require 'org-item-tags)
 (require 'ox-md)
+(require 'org-indent)
 
 (defmacro org-item-tags-test--with (text &rest body)
   "Run BODY in an Org buffer holding TEXT, point at its start."
@@ -89,6 +90,28 @@ at `org-tags-column', as a heading's."
        (org-set-tags-command '(4))
        (should (equal (buffer-string)
                       "* H              :h:\n- item           :a:\n  - inner        :b:\n"))))))
+
+(ert-deftest org-item-tags-test-org-indent ()
+  "With `org-indent-mode', an item's tags are seen where its heading's are."
+  (org-item-tags-test--with "* H :h:\n- item\n** H2 :h:\n- deeper\n"
+    (let ((org-tags-column -20)
+          (org-indent-indentation-per-level 1))
+      (org-indent-mode 1)
+      (org-indent-add-properties (point-min) (point-max))
+      (org-align-tags t)
+      (org-item-tags-test--line "- item")
+      (org-item-tags-set '("a"))
+      (org-item-tags-test--line "- deeper")
+      (org-item-tags-set '("b"))
+      (let ((seen (lambda (tag)
+                    (goto-char (point-min))
+                    (search-forward tag)
+                    (+ (current-column) (org-item-tags--prefix-width (line-beginning-position))))))
+        (should (= (funcall seen ":h:") (funcall seen ":a:")))
+        (goto-char (point-min))
+        (search-forward "** H2")
+        (should (= (progn (search-forward ":h:") (+ (current-column) (org-item-tags--prefix-width (line-beginning-position))))
+                   (funcall seen ":b:")))))))
 
 (ert-deftest org-item-tags-test-set-tags-command ()
   "C-c C-q on an item's first line sets its tags; elsewhere the heading's."
