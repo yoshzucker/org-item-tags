@@ -1,0 +1,84 @@
+#+title: org-item-tags
+#+options: toc:nil num:nil
+
+Tags on the items of a plain list, written and used as a heading's are.
+
+* Why
+
+Org takes tags on headings only.  So an entry that wants one -- a fact
+taken as given, a step still waiting, an idea to leave out of the
+export -- has to be a heading, and the entries beside it often follow,
+to keep them alike.  A tag says something about the entry; whether the
+entry is a heading or an item is how it is written.  Here the one no
+longer decides the other.
+
+* Writing them
+
+An item's tags are written as a heading's, at the end of its first line:
+
+#+begin_src org
+,* Plan :project:
+- Ask the team before Friday :waiting:
+- Book the room
+  - The large one, if it is free :maybe:
+- budget :: what is left of it :draft:review:
+#+end_src
+
+- Only the item's first line, the one with its bullet, takes them.
+- The characters are those Org allows in a tag: letters, digits, =_=,
+  =@=, =#= and =%=.
+- They are not the term of a description item, the words before =::=,
+  which org-element also calls the item's tag.
+
+* The mode
+
+~M-x org-item-tags-mode~, or in your configuration:
+
+#+begin_src emacs-lisp
+(org-item-tags-mode 1)
+#+end_src
+
+It is global, and makes Org's own commands carry the tags of items:
+
+| Where           | What                                                                         |
+|-----------------+------------------------------------------------------------------------------|
+| ~C-c C-q~       | on an item's first line, sets the item's tags, as on a heading, fast tag selection included |
+| ~C-c -~         | a heading made an item keeps its tags at the end of its line                 |
+| ~C-c *~         | an item made a heading has them as the heading's tags, aligned               |
+| completion      | tags on items are offered with those on headings                             |
+| export          | an item with one of the exclude tags (~:noexport:~) is left out with what is under it; with ~tags:nil~, the tags of items are not written |
+| the buffer      | they are shown in the ~org-tag~ face                                          |
+
+Anywhere else -- elsewhere in an item, on a heading, with a prefix
+argument or a region -- ~C-c C-q~ does what it does without the mode.
+Turned off, the mode takes all of this back.
+
+An item inherits the tags of the items above it and of its heading, as
+~org-use-tag-inheritance~ says for headings.
+
+~org-item-tags-column~ says where an item's tags start, as
+~org-tags-column~ does for a heading's.  It is 0 by default: one space
+after the words, as an item's line is usually filled with its text.
+
+* For Lisp
+
+| Function               | Does                                                                                    |
+|------------------------+-----------------------------------------------------------------------------------------|
+| ~org-item-tags-get~    | the tags of the item or heading at a position, inherited ones marked as ~org-get-tags~ marks them |
+| ~org-item-tags-set~    | sets them, from a list or a string ~"a:b"~; nil takes them off                          |
+| ~org-item-tags-toggle~ | puts one on or takes it off                                                             |
+| ~org-item-tags-split~  | parts a line into its words and its tags                                                |
+
+The first three take an item or a heading alike.
+
+* Not covered
+
+Agenda views, tag searches and sparse trees by tag still see headings
+only.
+
+* Tests
+
+#+begin_src sh
+emacs --batch -Q -L . -L test -l test/org-item-tags-test.el \
+      -f ert-run-tests-batch-and-exit
+#+end_src
