@@ -58,8 +58,9 @@ above and the heading, marked so; on a heading, as Org has them."
 
 (ert-deftest org-item-tags-test-set ()
   "Tags written at the end of the first line, replaced, taken off; where,
-as `org-item-tags-column' says."
+at `org-tags-column', as a heading's."
   (org-item-tags-test--with "* H\n- Ask the team\n  more\n"
+   (let ((org-tags-column 0))
     (org-item-tags-test--line "- Ask")
     (org-item-tags-set '("waiting"))
     (should (equal (buffer-string) "* H\n- Ask the team :waiting:\n  more\n"))
@@ -70,21 +71,31 @@ as `org-item-tags-column' says."
     (should (equal (buffer-string) "* H\n- Ask the team :b:c:\n  more\n"))
     (org-item-tags-set nil)
     (should (equal (buffer-string) "* H\n- Ask the team\n  more\n"))
-    (let ((org-item-tags-column 20))
+    (let ((org-tags-column 20))
       (org-item-tags-set '("x"))
       (should (equal (buffer-string) "* H\n- Ask the team      :x:\n  more\n")))
-    (let ((org-item-tags-column -20))
+    (let ((org-tags-column -20))
       (org-item-tags-set '("x"))
       (should (equal (buffer-string) "* H\n- Ask the team   :x:\n  more\n")))
     (goto-char (point-min))
     (org-item-tags-set '("h"))
-    (should (equal (org-get-tags nil t) '("h")))))
+    (should (equal (org-get-tags nil t) '("h"))))))
+
+(ert-deftest org-item-tags-test-align-all ()
+  "C-u C-c C-q aligns the items' tags with the headings'."
+  (org-item-tags-test--with "* H :h:\n- item :a:\n  - inner   :b:\n"
+    (org-item-tags-test--on
+     (let ((org-tags-column -20))
+       (org-set-tags-command '(4))
+       (should (equal (buffer-string)
+                      "* H              :h:\n- item           :a:\n  - inner        :b:\n"))))))
 
 (ert-deftest org-item-tags-test-set-tags-command ()
   "C-c C-q on an item's first line sets its tags; elsewhere the heading's."
   (org-item-tags-test--with "* H :h:\n- item\n  more\n"
     (org-item-tags-test--on
-     (let ((org-use-fast-tag-selection nil))
+     (let ((org-use-fast-tag-selection nil)
+           (org-tags-column 0))
        (cl-letf (((symbol-function 'completing-read-multiple)
                   (lambda (_prompt table &rest _)
                     (should (assoc "h" (if (functionp table) org-last-tags-completion-table table)))
@@ -109,6 +120,7 @@ as `org-item-tags-column' says."
   (org-item-tags-test--with "* H\n** First   :a:b:\n** Second\n** Third :c:\n"
     (org-item-tags-test--on
      (let ((org-adapt-indentation nil)
+           (org-tags-column 0)
            (transient-mark-mode t))
        (org-item-tags-test--line "** First")
        (push-mark (point-max) t t)
@@ -116,10 +128,11 @@ as `org-item-tags-column' says."
        (should (equal (buffer-string) "* H\n- First :a:b:\n- Second\n- Third :c:\n")))))
   (org-item-tags-test--with "* H\n** Alone      :a:\n"
     (org-item-tags-test--on
-     (let ((org-adapt-indentation nil))
+     (let ((org-adapt-indentation nil)
+           (org-tags-column -20))
        (org-item-tags-test--line "** Alone")
        (call-interactively #'org-toggle-item)
-       (should (equal (buffer-string) "* H\n- Alone :a:\n"))))))
+       (should (equal (buffer-string) "* H\n- Alone          :a:\n"))))))
 
 (ert-deftest org-item-tags-test-toggle-heading ()
   "C-c * makes an item's tags the heading's, aligned as Org aligns them."

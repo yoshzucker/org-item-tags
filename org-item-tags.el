@@ -37,14 +37,16 @@
 ;;
 ;; With `org-item-tags-mode' on, Org's own commands carry them:
 ;;
-;;   C-c C-q   on an item's first line, sets the item's tags, as on a heading
+;;   C-c C-q   on an item's first line, sets the item's tags, as on a heading;
+;;             with C-u, aligns the items' tags with the headings'
 ;;   C-c -     a heading turned into an item keeps its tags
 ;;   C-c *     an item turned into a heading has them as its tags, aligned
 ;;   export    an item tagged with one of the export's exclude tags is left
 ;;             out; with tags:nil, item tags are not written
 ;;
 ;; and tags on items are shown in the `org-tag' face and offered when
-;; tags are completed.  An item inherits the tags of the items above it
+;; tags are completed.  They stand where a heading's do, at
+;; `org-tags-column'.  An item inherits the tags of the items above it
 ;; and of its heading, as `org-use-tag-inheritance' says.
 ;;
 ;; For Lisp: `org-item-tags-get', `org-item-tags-set',
@@ -63,13 +65,6 @@
 (defgroup org-item-tags nil
   "Tags on list items, as on headings."
   :group 'org-tags)
-
-(defcustom org-item-tags-column 0
-  "Where an item's tags start, as `org-tags-column' says for a heading.
-0 puts them one space after the words; a positive number at that column;
-a negative number so that they end at its absolute value.  At least one
-space is always left."
-  :type 'integer)
 
 (defconst org-item-tags--tags-re
   "[ \t]+\\(:\\(?:[[:alnum:]_@#%]+:\\)+\\)[ \t]*"
@@ -163,12 +158,23 @@ Replace the tags there; with none, leave the line without."
       (end-of-line)
       (delete-horizontal-space t))
     (when tags
+      ;; Where Org puts a heading's: `org-tags-column'.
       (let* ((string (org-make-tag-string tags))
              (words (current-column))
-             (column (cond ((zerop org-item-tags-column) 0)
-                           ((> org-item-tags-column 0) org-item-tags-column)
-                           (t (- (abs org-item-tags-column) (string-width string))))))
+             (column (if (>= org-tags-column 0)
+                         org-tags-column
+                       (- (abs org-tags-column) (string-width string)))))
         (insert (make-string (max 1 (- column words)) ?\s) string)))))
+
+(defun org-item-tags-align-all ()
+  "Align the tags on every item of the buffer, at `org-tags-column'."
+  (org-with-wide-buffer
+   (goto-char (point-min))
+   (while (re-search-forward org-item-tags--re nil t)
+     (let ((bol (save-match-data (org-item-tags--item-start (match-beginning 0)))))
+       (when bol
+         (org-item-tags--write bol (org-item-tags--local bol))
+         (goto-char (line-end-position)))))))
 
 (defun org-item-tags-set (tags &optional pos)
   "Set the tags of the item or heading at POS to TAGS.
@@ -213,13 +219,19 @@ when TAG is on afterwards."
 
 (defun org-item-tags--set-tags-command (fn &optional arg)
   "Around `org-set-tags-command': set an item's tags on its first line.
-FN is the command, ARG its argument.  On a heading, with a prefix
-argument or a region, FN as it is."
+FN is the command, ARG its argument.  With \\[universal-argument],
+which aligns the tags of every heading, the items' too.  On a heading,
+with another prefix argument or a region, FN as it is."
   (let ((bol (and (not arg)
                   (not (org-region-active-p))
                   (org-item-tags--item-start))))
-    (if (not bol)
-        (funcall fn arg)
+    (cond
+     ((equal arg '(4))
+      (funcall fn arg)
+      (org-item-tags-align-all))
+     ((not bol)
+      (funcall fn arg))
+     (t
       (cl-letf* ((tags (org-item-tags-get bol))
                  ((symbol-function 'org-before-first-heading-p) #'ignore)
                  ((symbol-function 'org-back-to-heading)
@@ -228,7 +240,7 @@ argument or a region, FN as it is."
                   (lambda (&rest _) tags))
                  ((symbol-function 'org-set-tags)
                   (lambda (new) (org-item-tags-set new bol))))
-        (funcall fn arg)))))
+        (funcall fn arg))))))
 
 (defun org-item-tags--toggle-range ()
   "Return the lines `org-toggle-item' and `org-toggle-heading' act on.

@@ -43,6 +43,7 @@ It is global, and makes Org's own commands carry the tags of items:
 | Where           | What                                                                         |
 |-----------------+------------------------------------------------------------------------------|
 | ~C-c C-q~       | on an item's first line, sets the item's tags, as on a heading, fast tag selection included |
+| ~C-u C-c C-q~   | aligns the tags of the items with those of the headings                      |
 | ~C-c -~         | a heading made an item keeps its tags at the end of its line                 |
 | ~C-c *~         | an item made a heading has them as the heading's tags, aligned               |
 | completion      | tags on items are offered with those on headings                             |
@@ -56,9 +57,8 @@ Turned off, the mode takes all of this back.
 An item inherits the tags of the items above it and of its heading, as
 ~org-use-tag-inheritance~ says for headings.
 
-~org-item-tags-column~ says where an item's tags start, as
-~org-tags-column~ does for a heading's.  It is 0 by default: one space
-after the words, as an item's line is usually filled with its text.
+An item's tags stand where a heading's do, at ~org-tags-column~, and
+~C-u C-c C-q~, which aligns every heading's, aligns the items' too.
 
 * For Lisp
 
