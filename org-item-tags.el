@@ -46,8 +46,9 @@
 ;;
 ;; and tags on items are shown in the `org-tag' face and offered when
 ;; tags are completed.  They stand where a heading's do, at
-;; `org-tags-column', as seen with `org-indent-mode' too.  An item inherits the tags of the items above it
-;; and of its heading, as `org-use-tag-inheritance' says.
+;; `org-tags-column', as seen with `org-indent-mode' too.  An item
+;; inherits the tags of the items above it and of its heading, as
+;; `org-use-tag-inheritance' says.
 ;;
 ;; For Lisp: `org-item-tags-get', `org-item-tags-set',
 ;; `org-item-tags-toggle' work on an item or a heading alike, and
@@ -66,8 +67,11 @@
   "Tags on list items, as on headings."
   :group 'org-tags)
 
+(defconst org-item-tags--tags (concat ":\\(?:" org-tag-re ":\\)+")
+  "Tags with their colons, as \":a:b:\".")
+
 (defconst org-item-tags--tags-re
-  "[ \t]+\\(:\\(?:[[:alnum:]_@#%]+:\\)+\\)[ \t]*"
+  (concat "[ \t]+\\(" org-item-tags--tags "\\)[ \t]*")
   "Tags and the blanks around them, group 1 the tags with their colons.")
 
 (defconst org-item-tags--re (concat org-item-tags--tags-re "$")
@@ -185,15 +189,23 @@ before the heading itself; 0 without it."
          (org-back-to-heading t)
          (org-item-tags--prefix-width (point))))))
 
+(defun org-item-tags--next (&optional limit)
+  "Move past the next tags on an item's first line, before LIMIT.
+Return the start of that line, the match data left on the tags; nil
+when there are none."
+  (let (bol)
+    (while (and (not bol) (re-search-forward org-item-tags--re limit t))
+      (setq bol (save-match-data (org-item-tags--item-start (match-beginning 0)))))
+    bol))
+
 (defun org-item-tags-align-all ()
   "Align the tags on every item of the buffer, at `org-tags-column'."
   (org-with-wide-buffer
    (goto-char (point-min))
-   (while (re-search-forward org-item-tags--re nil t)
-     (let ((bol (save-match-data (org-item-tags--item-start (match-beginning 0)))))
-       (when bol
-         (org-item-tags--write bol (org-item-tags--local bol))
-         (goto-char (line-end-position)))))))
+   (let (bol)
+     (while (setq bol (org-item-tags--next))
+       (org-item-tags--write bol (org-item-tags--local bol))
+       (goto-char (line-end-position))))))
 
 (defun org-item-tags-set (tags &optional pos)
   "Set the tags of the item or heading at POS to TAGS.
@@ -227,11 +239,9 @@ when TAG is on afterwards."
   (let (tags)
     (org-with-wide-buffer
      (goto-char (point-min))
-     (while (re-search-forward org-item-tags--re nil t)
-       (let ((found (match-string-no-properties 1)))
-         (when (save-match-data (org-item-tags--item-start (match-beginning 0)))
-           (dolist (tag (org-split-string found ":"))
-             (cl-pushnew (list tag) tags :test #'equal))))))
+     (while (org-item-tags--next)
+       (dolist (tag (org-split-string (match-string-no-properties 1) ":"))
+         (cl-pushnew (list tag) tags :test #'equal))))
     (nreverse tags)))
 
 ;;;; Org's commands
@@ -326,10 +336,8 @@ FN is the command, ARGS its arguments."
 
 (defun org-item-tags--buffer-tags-too (tags)
   "After `org-get-buffer-tags': add to TAGS those on the buffer's items."
-  (let ((all (copy-sequence tags)))
-    (dolist (tag (org-item-tags--buffer-tags))
-      (unless (assoc (car tag) all) (setq all (append all (list tag)))))
-    all))
+  (append tags (cl-remove-if (lambda (tag) (assoc (car tag) tags))
+                             (org-item-tags--buffer-tags))))
 
 ;;;; Export
 
@@ -352,7 +360,7 @@ the blank before the tags is that object's, its post blank, else nil."
            (newline (and (stringp string) (string-search "\n" string)))
            (head (and (stringp string) (substring string 0 newline))))
       (when (and head
-                 (string-match (concat "\\(?:\\`\\|[ \t]+\\)\\(:\\(?:[[:alnum:]_@#%]+:\\)+\\)[ \t]*\\'")
+                 (string-match (concat "\\(?:\\`\\|[ \t]+\\)\\(" org-item-tags--tags "\\)[ \t]*\\'")
                                head)
                  ;; Tags start the text only where a blank is before it.
                  (or (> (match-beginning 0) 0)
@@ -393,15 +401,8 @@ tags are not written."
 
 ;;;; The mode
 
-(defun org-item-tags--fontify (limit)
-  "Find the next tags on an item's first line before LIMIT, for font lock."
-  (let (found)
-    (while (and (not found) (re-search-forward org-item-tags--re limit t))
-      (setq found (save-match-data (org-item-tags--item-start (match-beginning 0)))))
-    found))
-
 (defconst org-item-tags--keywords
-  '((org-item-tags--fontify 1 'org-tag prepend))
+  '((org-item-tags--next 1 'org-tag prepend))
   "Font lock keywords showing tags on items.")
 
 (defun org-item-tags--font-lock (on)
@@ -415,6 +416,18 @@ tags are not written."
   "Show tags on items in the current buffer."
   (org-item-tags--font-lock t))
 
+(defconst org-item-tags--advice
+  '((org-set-tags-command :around org-item-tags--set-tags-command)
+    (org-toggle-item :around org-item-tags--toggle-item)
+    (org-toggle-heading :around org-item-tags--toggle-heading)
+    (org-get-buffer-tags :filter-return org-item-tags--buffer-tags-too))
+  "What `org-item-tags-mode' advises, as (FUNCTION HOW ADVICE).")
+
+(defconst org-item-tags--hooks
+  '((org-export-filter-parse-tree-functions . org-item-tags--export)
+    (org-mode-hook . org-item-tags--font-lock-on))
+  "What `org-item-tags-mode' puts on hooks, as (HOOK . FUNCTION).")
+
 ;;;###autoload
 (define-minor-mode org-item-tags-mode
   "Take tags on list items, at the end of an item's first line, as tags.
@@ -426,20 +439,14 @@ under tags:nil.  They are shown as a heading's are and offered in
 completion."
   :global t
   :group 'org-item-tags
-  (if org-item-tags-mode
-      (progn
-        (advice-add 'org-set-tags-command :around #'org-item-tags--set-tags-command)
-        (advice-add 'org-toggle-item :around #'org-item-tags--toggle-item)
-        (advice-add 'org-toggle-heading :around #'org-item-tags--toggle-heading)
-        (advice-add 'org-get-buffer-tags :filter-return #'org-item-tags--buffer-tags-too)
-        (add-hook 'org-export-filter-parse-tree-functions #'org-item-tags--export)
-        (add-hook 'org-mode-hook #'org-item-tags--font-lock-on))
-    (advice-remove 'org-set-tags-command #'org-item-tags--set-tags-command)
-    (advice-remove 'org-toggle-item #'org-item-tags--toggle-item)
-    (advice-remove 'org-toggle-heading #'org-item-tags--toggle-heading)
-    (advice-remove 'org-get-buffer-tags #'org-item-tags--buffer-tags-too)
-    (remove-hook 'org-export-filter-parse-tree-functions #'org-item-tags--export)
-    (remove-hook 'org-mode-hook #'org-item-tags--font-lock-on))
+  (pcase-dolist (`(,symbol ,how ,function) org-item-tags--advice)
+    (if org-item-tags-mode
+        (advice-add symbol how function)
+      (advice-remove symbol function)))
+  (pcase-dolist (`(,hook . ,function) org-item-tags--hooks)
+    (if org-item-tags-mode
+        (add-hook hook function)
+      (remove-hook hook function)))
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
       (when (derived-mode-p 'org-mode)
